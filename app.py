@@ -26,32 +26,68 @@ def cargar_datos():
 cargar_datos()
 
 # -------------------------------------------------------------
-# CONTROL DE ACCESO / SELECCIÓN DE USUARIO
+# CONTROL DE ACCESOS Y AUTENTICACIÓN
 # -------------------------------------------------------------
-st.sidebar.title("🔐 Control de Acceso")
-usuario = st.sidebar.radio(
-    "Selecciona Usuario:",
-    ["👨‍💼 Usuario 1 (Admin - Acceso Total)", "👥 Usuario 2 (Presupuesto General)"]
-)
+USUARIOS = {
+    "admin": {"nombre": "Usuario 1 (Admin)", "password": "123", "rol": "Admin"},
+    "usuario2": {"nombre": "Usuario 2 (General)", "password": "456", "rol": "Restringido"}
+}
+
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+if "usuario_actual" not in st.session_state:
+    st.session_state["usuario_actual"] = None
+
+def login():
+    st.title("🔐 Control de Acceso al Sistema Presupuestal")
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.subheader("Iniciar Sesión")
+        with st.form("form_login"):
+            input_user = st.text_input("Usuario")
+            input_pass = st.text_input("Contraseña", type="password")
+            btn_login = st.form_submit_button("Ingresar")
+            
+            if btn_login:
+                if input_user in USUARIOS and USUARIOS[input_user]["password"] == input_pass:
+                    st.session_state["autenticado"] = True
+                    st.session_state["usuario_actual"] = USUARIOS[input_user]
+                    st.success(f"Bienvenido {USUARIOS[input_user]['nombre']}")
+                    st.rerun()
+                else:
+                    st.error("Usuario o contraseña incorrectos")
+
+# Si no está autenticado, mostrar formulario de Login y detener ejecución
+if not st.session_state["autenticado"]:
+    login()
+    st.stop()
+
+# -------------------------------------------------------------
+# BARRA LATERAL (USUARIO LOGUEADO Y NAVEGACIÓN)
+# -------------------------------------------------------------
+usuario_info = st.session_state["usuario_actual"]
+st.sidebar.title(f"👤 {usuario_info['nombre']}")
+
+if st.sidebar.button("🚪 Cerrar Sesión"):
+    st.session_state["autenticado"] = False
+    st.session_state["usuario_actual"] = None
+    st.rerun()
 
 st.sidebar.markdown("---")
 
-# Definición de ventanas permitidas según el usuario
-if usuario == "👨‍💼 Usuario 1 (Admin - Acceso Total)":
+# Filtrado de ventanas según el rol del usuario
+if usuario_info["rol"] == "Admin":
     ventanas_disponibles = ["🏠 Presupuesto de Pagos Casa", "🏛️ Presupuesto General Casa"]
-    st.sidebar.success("Modo Admin: Acceso Total")
 else:
     ventanas_disponibles = ["🏛️ Presupuesto General Casa"]
-    st.sidebar.info("Modo Restringido: Solo Presupuesto General")
 
-# NAVEGACIÓN PRINCIPAL
-st.sidebar.title("🏠 Sistema Presupuestal")
+st.sidebar.title("🏠 Navegación")
 ventana_principal = st.sidebar.radio("Selecciona la Ventana:", ventanas_disponibles)
-
 st.sidebar.markdown("---")
 
 # =============================================================
-# VENTANA 1: PRESUPUESTO DE PAGOS CASA (Solo Usuario 1)
+# VENTANA 1: PRESUPUESTO DE PAGOS CASA (Solo Admin)
 # =============================================================
 if ventana_principal == "🏠 Presupuesto de Pagos Casa":
     st.title("🏠 Presupuesto de Pagos Casa")
@@ -178,7 +214,7 @@ if ventana_principal == "🏠 Presupuesto de Pagos Casa":
             st.dataframe(df_pagos, use_container_width=True)
 
 # =============================================================
-# VENTANA 2: PRESUPUESTO GENERAL CASA (Usuario 1 y Usuario 2)
+# VENTANA 2: PRESUPUESTO GENERAL CASA (Admin y Usuario 2)
 # =============================================================
 elif ventana_principal == "🏛️ Presupuesto General Casa":
     st.title("🏛️ Presupuesto General Casa")
