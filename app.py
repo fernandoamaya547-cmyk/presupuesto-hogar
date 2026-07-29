@@ -26,18 +26,32 @@ def cargar_datos():
 cargar_datos()
 
 # -------------------------------------------------------------
-# NAVEGACIÓN PRINCIPAL: SELECCIÓN DE VENTANA
+# CONTROL DE ACCESO / SELECCIÓN DE USUARIO
 # -------------------------------------------------------------
-st.sidebar.title("🏠 Sistema Presupuestal")
-ventana_principal = st.sidebar.radio(
-    "Selecciona la Ventana:",
-    ["🏠 Presupuesto de Pagos Casa", "🏛️ Presupuesto General Casa"]
+st.sidebar.title("🔐 Control de Acceso")
+usuario = st.sidebar.radio(
+    "Selecciona Usuario:",
+    ["👨‍💼 Usuario 1 (Admin - Acceso Total)", "👥 Usuario 2 (Presupuesto General)"]
 )
 
 st.sidebar.markdown("---")
 
+# Definición de ventanas permitidas según el usuario
+if usuario == "👨‍💼 Usuario 1 (Admin - Acceso Total)":
+    ventanas_disponibles = ["🏠 Presupuesto de Pagos Casa", "🏛️ Presupuesto General Casa"]
+    st.sidebar.success("Modo Admin: Acceso Total")
+else:
+    ventanas_disponibles = ["🏛️ Presupuesto General Casa"]
+    st.sidebar.info("Modo Restringido: Solo Presupuesto General")
+
+# NAVEGACIÓN PRINCIPAL
+st.sidebar.title("🏠 Sistema Presupuestal")
+ventana_principal = st.sidebar.radio("Selecciona la Ventana:", ventanas_disponibles)
+
+st.sidebar.markdown("---")
+
 # =============================================================
-# VENTANA 1: PRESUPUESTO DE PAGOS CASA
+# VENTANA 1: PRESUPUESTO DE PAGOS CASA (Solo Usuario 1)
 # =============================================================
 if ventana_principal == "🏠 Presupuesto de Pagos Casa":
     st.title("🏠 Presupuesto de Pagos Casa")
@@ -164,7 +178,7 @@ if ventana_principal == "🏠 Presupuesto de Pagos Casa":
             st.dataframe(df_pagos, use_container_width=True)
 
 # =============================================================
-# VENTANA 2: PRESUPUESTO GENERAL CASA
+# VENTANA 2: PRESUPUESTO GENERAL CASA (Usuario 1 y Usuario 2)
 # =============================================================
 elif ventana_principal == "🏛️ Presupuesto General Casa":
     st.title("🏛️ Presupuesto General Casa")
