@@ -222,4 +222,81 @@ with tab_crear_mes:
                         "Año": anio_destino,
                         "Concepto": str(row["Concepto"]).strip(),
                         "Tipo": row["Tipo"] if pd.notna(row["Tipo"]) else "Fijo",
-                        "Monto Presupuestado": row["Monto Base (COP)"] if pd.notna(row["Monto Base (COP)"]) else
+                        "Monto Presupuestado": row["Monto Base (COP)"] if pd.notna(row["Monto Base (COP)"]) else 0,
+                        "Monto Pagado": 0,
+                        "Estado": "Pendiente"
+                    })
+                    id_inicial += 1
+
+                st.session_state["presupuesto_db"] = pd.concat(
+                    [df_db, pd.DataFrame(nuevos_registros)],
+                    ignore_index=True
+                )
+                guardar_presupuesto(st.session_state["presupuesto_db"])
+                st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} guardado permanentemente!")
+                st.rerun()
+            else:
+                st.error("Debes seleccionar o ingresar al menos un concepto.")
+
+# ----------------------------------------------------
+# TAB 3: REGISTRAR PAGOS
+# ----------------------------------------------------
+with tab_liquidar:
+    st.subheader("✅ Liquidar / Cerrar Pagos del Mes")
+    
+    df_pendientes = st.session_state["presupuesto_db"][st.session_state["presupuesto_db"]["Estado"] == "Pendiente"]
+
+    if not df_pendientes.empty:
+        col_l1, col_l2 = st.columns([2, 2])
+        
+        with col_l1:
+            id_pago = st.selectbox(
+                "Selecciona el concepto a pagar:",
+                options=df_pendientes["ID"].tolist(),
+                format_func=lambda x: f"#{x} - {df_pendientes[df_pendientes['ID'] == x]['Concepto'].values[0]} ({df_pendientes[df_pendientes['ID'] == x]['Mes'].values[0]})"
+            )
+            
+            info_item = df_pendientes[df_pendientes["ID"] == id_pago].iloc[0]
+            st.info(f"**Monto Presupuestado:** ${info_item['Monto Presupuestado']:,.0f} COP")
+
+        with col_l2:
+            monto_real = st.number_input(
+                "Valor Real Pagado (COP):",
+                min_value=0,
+                value=int(info_item['Monto Presupuestado']),
+                step=1000
+            )
+
+            if st.button("Marcar Pago como Realizado"):
+                idx = st.session_state["presupuesto_db"].index[st.session_state["presupuesto_db"]["ID"] == id_pago].tolist()[0]
+                st.session_state["presupuesto_db"].at[idx, "Monto Pagado"] = monto_real
+                st.session_state["presupuesto_db"].at[idx, "Estado"] = "Pagado"
+                
+                guardar_presupuesto(st.session_state["presupuesto_db"])
+                st.success(f"¡Orden #{id_pago} actualizada y guardada!")
+                st.rerun()
+    else:
+        st.info("No hay pagos pendientes registrados por el momento.")
+
+# ----------------------------------------------------
+# TAB 4: HISTORIAL Y EDICIÓN
+# ----------------------------------------------------
+with tab_historial:
+    st.subheader("📊 Histórico Completo de Presupuestos Generados")
+    st.caption("Los cambios realizados aquí se guardarán permanentemente al presionar Enter o cambiar de celda:")
+
+    df_db_editado = st.data_editor(
+        st.session_state["presupuesto_db"],
+        num_rows="dynamic",
+        column_config={
+            "Monto Presupuestado": st.column_config.NumberColumn(format="$%d"),
+            "Monto Pagado": st.column_config.NumberColumn(format="$%d"),
+            "Estado": st.column_config.SelectboxColumn(options=["Pendiente", "Pagado"])
+        },
+        use_container_width=True,
+        key="key_editor_historico_db_v1"
+    )
+
+    if not df_db_editado.equals(st.session_state["presupuesto_db"]):
+        st.session_state["presupuesto_db"] = df_db_editado
+        guardar_presupuesto(df_db_editado)
