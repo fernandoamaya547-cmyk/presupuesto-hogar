@@ -47,21 +47,24 @@ if "presupuesto_db" not in st.session_state:
     st.session_state["presupuesto_db"] = cargar_presupuesto()
 
 # ==============================================================================
-# BARRA LATERAL CORREDIZA (FILTROS Y RESUMEN RÁPIDO)
+# BARRA LATERAL IZQUIERDA DESPLEGABLE
 # ==============================================================================
 with st.sidebar:
-    st.header("📊 Resumen e Indicadores")
-    st.caption("Métricas consolidadas de tu presupuesto.")
+    st.header("⚙️ Panel Lateral de Control")
+    st.caption("Filtros e indicadores clave colapsables.")
 
     df_db_sidebar = st.session_state["presupuesto_db"]
 
     if not df_db_sidebar.empty:
-        anios_disponibles = sorted(df_db_sidebar["Año"].unique().tolist())
-        anio_sel = st.selectbox("Filtrar por Año:", anios_disponibles, index=len(anios_disponibles)-1, key="sb_anio")
-        
-        meses_disponibles = ["Todos"] + df_db_sidebar[df_db_sidebar["Año"] == anio_sel]["Mes"].unique().tolist()
-        mes_sel = st.selectbox("Filtrar por Mes:", meses_disponibles, key="sb_mes")
+        # Seccion desplegable 1: Filtros de Fecha
+        with st.expander("🔍 **Filtros de Búsqueda**", expanded=True):
+            anios_disponibles = sorted(df_db_sidebar["Año"].unique().tolist())
+            anio_sel = st.selectbox("Seleccionar Año:", anios_disponibles, index=len(anios_disponibles)-1, key="sb_anio")
+            
+            meses_disponibles = ["Todos"] + df_db_sidebar[df_db_sidebar["Año"] == anio_sel]["Mes"].unique().tolist()
+            mes_sel = st.selectbox("Seleccionar Mes:", meses_disponibles, key="sb_mes")
 
+        # Filtrado de datos
         df_filtrado = df_db_sidebar[df_db_sidebar["Año"] == anio_sel]
         if mes_sel != "Todos":
             df_filtrado = df_filtrado[df_filtrado["Mes"] == mes_sel]
@@ -70,21 +73,19 @@ with st.sidebar:
         total_pagado = df_filtrado["Monto Pagado"].sum()
         total_por_pagar = df_filtrado[df_filtrado["Estado"] == "Pendiente"]["Monto Presupuestado"].sum()
 
-        st.divider()
+        # Sección desplegable 2: Métricas Principales
+        with st.expander("💰 **Métricas del Período**", expanded=True):
+            st.metric("Presupuestado", f"${total_presupuestado:,.0f} COP")
+            st.metric("Pagado", f"${total_pagado:,.0f} COP")
+            st.metric("Por Pagar", f"${total_por_pagar:,.0f} COP")
 
-        st.metric("💰 Total Presupuestado", f"${total_presupuestado:,.0f} COP")
-        st.metric("✅ Total Pagado", f"${total_pagado:,.0f} COP")
-        st.metric("⏳ Total Por Pagar", f"${total_por_pagar:,.0f} COP")
-
-        st.divider()
-
-        st.subheader("📈 Gráfica del Período")
-        datos_grafica = pd.DataFrame({
-            "Estado": ["Pagado", "Por Pagar"],
-            "Monto (COP)": [total_pagado, total_por_pagar]
-        })
-        
-        st.bar_chart(datos_grafica.set_index("Estado"))
+        # Sección desplegable 3: Gráfica Rápida
+        with st.expander("📈 **Gráfico de Avance**", expanded=False):
+            datos_grafica = pd.DataFrame({
+                "Estado": ["Pagado", "Por Pagar"],
+                "Monto (COP)": [total_pagado, total_por_pagar]
+            })
+            st.bar_chart(datos_grafica.set_index("Estado"))
     else:
         st.info("Aún no hay presupuestos cargados para mostrar métricas.")
 
@@ -194,7 +195,7 @@ with tab_conceptos:
         guardar_catalogo(df_cat_editado)
 
 # ----------------------------------------------------
-# TAB 2: SELECCIONAR CONCEPTOS Y EDITARLOS LIBREMENTE (CORREGIDO)
+# TAB 2: SELECCIONAR CONCEPTOS Y EDITARLOS LIBREMENTE
 # ----------------------------------------------------
 with tab_crear_mes:
     st.subheader("2. Seleccionar / Meter Conceptos para el Presupuesto del Mes")
@@ -213,7 +214,6 @@ with tab_crear_mes:
 
     df_cat = st.session_state["catalogo_conceptos"].copy()
     
-    # Aseguramos que la columna exista para evitar KeyError cuando el catálogo esté vacío
     if "Monto Base (COP)" not in df_cat.columns:
         df_cat["Monto Base (COP)"] = 0
 
@@ -243,7 +243,6 @@ with tab_crear_mes:
         if existe:
             st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}.")
         else:
-            # Control de seguridad si el DataFrame está completamente vacío
             if not df_seleccion.empty and "Concepto" in df_seleccion.columns:
                 conceptos_seleccionados = df_seleccion[
                     (df_seleccion["Incluir"] == True) & 
