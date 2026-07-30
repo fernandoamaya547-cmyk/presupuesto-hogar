@@ -34,21 +34,24 @@ if "presupuesto_db" not in st.session_state:
     ])
 
 # ==========================================
-# BARRA LATERAL: CONTROL DE ACCESO
+# BARRA LATERAL: SELECCIÓN DE DOMINIO / USUARIO
 # ==========================================
-st.sidebar.title("🔐 Control de Acceso")
-rol = st.sidebar.selectbox(
-    "Selecciona tu perfil:",
-    ["Usuario 2 (General / Consulta)", "Admin (Usuario 1)"]
+st.sidebar.title("👥 Control de Usuarios y Dominios")
+dominio_seleccionado = st.sidebar.selectbox(
+    "Selecciona el módulo / perfil:",
+    [
+        "Presupuesto de Casa (Consulta / Pagos)",
+        "Presupuesto General (Administración)"
+    ]
 )
 st.sidebar.divider()
 
 # ==========================================
-# VISTA 1: USUARIO 2 (CONSULTA / DASHBOARD)
+# DOMINIO 1: PRESUPUESTO DE CASA (CONSULTA / DASHBOARD)
 # ==========================================
-if rol == "Usuario 2 (General / Consulta)":
+if dominio_seleccionado == "Presupuesto de Casa (Consulta / Pagos)":
     st.title("🏠 Presupuesto de Pagos Casa")
-    st.info("Perfil: Consulta General — Vista de cumplimiento e histórico de pagos.")
+    st.info("Módulo: Consulta General — Control de cumplimiento, totales y estado de los pagos del hogar.")
 
     df = st.session_state["presupuesto_db"]
 
@@ -79,7 +82,7 @@ if rol == "Usuario 2 (General / Consulta)":
     c4.metric("% Cumplimiento", f"{porcentaje:.1f}%")
 
     st.divider()
-    st.subheader("📋 Histórico de Pagos")
+    st.subheader("📋 Histórico de Pagos de la Casa")
     if not df_filtrado.empty:
         st.dataframe(
             df_filtrado.style.format({
@@ -92,10 +95,10 @@ if rol == "Usuario 2 (General / Consulta)":
         st.warning("No hay registros para los filtros seleccionados.")
 
 # ==========================================
-# VISTA 2: ADMIN (GESTIÓN DE CONCEPTOS Y MESES)
+# DOMINIO 2: PRESUPUESTO GENERAL (ADMINISTRACIÓN COMPLETA)
 # ==========================================
 else:
-    st.title("⚙️ Panel de Administración")
+    st.title("⚙️ Presupuesto General - Panel de Control")
 
     tab_conceptos, tab_crear_mes, tab_liquidar, tab_historial = st.tabs([
         "➕ Catálogo de Conceptos",
@@ -143,7 +146,7 @@ else:
         
         df_cat_editado = st.data_editor(
             st.session_state["catalogo_conceptos"],
-            num_rows="dynamic", # Permite añadir/eliminar filas directamente en la tabla
+            num_rows="dynamic",
             column_config={
                 "Monto Base (COP)": st.column_config.NumberColumn(format="$%d", min_value=0, step=1000),
                 "Tipo": st.column_config.SelectboxColumn(options=["Fijo", "Variable"], required=True)
@@ -158,7 +161,7 @@ else:
     # ----------------------------------------------------
     with tab_crear_mes:
         st.subheader("2. Seleccionar / Meter Conceptos para el Presupuesto del Mes")
-        st.caption("Puedes seleccionar conceptos existentes, editar sus nombres, montos, o agregar filas con conceptos completamente nuevos:")
+        st.caption("Puedes seleccionar conceptos existentes, editar sus nombres o montos, o meter nuevos conceptos en la tabla:")
 
         col_m1, col_m2 = st.columns(2)
         with col_m1:
@@ -176,10 +179,9 @@ else:
         if "Incluir" not in df_cat.columns:
             df_cat.insert(0, "Incluir", True)
 
-        # TABLA HABILITADA PARA EDITAR Y METER CONCEPTOS NUEVOS DIRECTAMENTE
         df_seleccion = st.data_editor(
             df_cat,
-            num_rows="dynamic", # Permite presionar '+' y METER nuevos conceptos directamente
+            num_rows="dynamic",
             column_config={
                 "Incluir": st.column_config.CheckboxColumn("¿Incluir este mes?", default=True),
                 "Concepto": st.column_config.TextColumn("Nombre del Concepto", required=True),
@@ -200,7 +202,6 @@ else:
             if existe:
                 st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}. Puedes gestionarlo en la pestaña 'Histórico'.")
             else:
-                # Filtrar solo las filas marcadas con la casilla "Incluir" y con concepto válido
                 conceptos_seleccionados = df_seleccion[
                     (df_seleccion["Incluir"] == True) & 
                     (df_seleccion["Concepto"].dropna() != "")
@@ -217,76 +218,3 @@ else:
                             "Año": anio_destino,
                             "Concepto": str(row["Concepto"]).strip(),
                             "Tipo": row["Tipo"] if pd.notna(row["Tipo"]) else "Fijo",
-                            "Monto Presupuestado": row["Monto Base (COP)"] if pd.notna(row["Monto Base (COP)"]) else 0,
-                            "Monto Pagado": 0,
-                            "Estado": "Pendiente"
-                        })
-                        id_inicial += 1
-
-                    st.session_state["presupuesto_db"] = pd.concat(
-                        [df_db, pd.DataFrame(nuevos_registros)],
-                        ignore_index=True
-                    )
-                    st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} cargado exitosamente con {len(nuevos_registros)} conceptos!")
-                    st.rerun()
-                else:
-                    st.error("Debes seleccionar o ingresar al menos un concepto para generar el presupuesto.")
-
-    # ----------------------------------------------------
-    # TAB 3: REGISTRAR PAGOS (CIERRE DE ÓRDENES)
-    # ----------------------------------------------------
-    with tab_liquidar:
-        st.subheader("✅ Liquidar / Cerrar Pagos del Mes")
-        
-        df_pendientes = st.session_state["presupuesto_db"][st.session_state["presupuesto_db"]["Estado"] == "Pendiente"]
-
-        if not df_pendientes.empty:
-            col_l1, col_l2 = st.columns([2, 2])
-            
-            with col_l1:
-                id_pago = st.selectbox(
-                    "Selecciona el concepto a pagar:",
-                    options=df_pendientes["ID"].tolist(),
-                    format_func=lambda x: f"#{x} - {df_pendientes[df_pendientes['ID'] == x]['Concepto'].values[0]} ({df_pendientes[df_pendientes['ID'] == x]['Mes'].values[0]})"
-                )
-                
-                info_item = df_pendientes[df_pendientes["ID"] == id_pago].iloc[0]
-                st.info(f"**Monto Presupuestado:** ${info_item['Monto Presupuestado']:,.0f} COP")
-
-            with col_l2:
-                monto_real = st.number_input(
-                    "Valor Real Pagado (COP):",
-                    min_value=0,
-                    value=int(info_item['Monto Presupuestado']),
-                    step=1000
-                )
-
-                if st.button("Marcar Pago como Realizado"):
-                    idx = st.session_state["presupuesto_db"].index[st.session_state["presupuesto_db"]["ID"] == id_pago].tolist()[0]
-                    st.session_state["presupuesto_db"].at[idx, "Monto Pagado"] = monto_real
-                    st.session_state["presupuesto_db"].at[idx, "Estado"] = "Pagado"
-                    st.success(f"¡Orden #{id_pago} de '{info_item['Concepto']}' actualizada a PAGADO!")
-                    st.rerun()
-        else:
-            st.success("🎉 ¡Excelente! No tienes pagos pendientes registrados.")
-
-    # ----------------------------------------------------
-    # TAB 4: EDICIÓN GENERAL Y ELIMINACIÓN DE REGISTROS
-    # ----------------------------------------------------
-    with tab_historial:
-        st.subheader("📊 Histórico Completo de Presupuestos Generados")
-        st.caption("Puedes editar cualquier casilla o eliminar filas desde esta tabla:")
-
-        df_db_editado = st.data_editor(
-            st.session_state["presupuesto_db"],
-            num_rows="dynamic",
-            column_config={
-                "Monto Presupuestado": st.column_config.NumberColumn(format="$%d"),
-                "Monto Pagado": st.column_config.NumberColumn(format="$%d"),
-                "Estado": st.column_config.SelectboxColumn(options=["Pendiente", "Pagado"])
-            },
-            use_container_width=True,
-            key="editor_historico_db_tabla_key"
-        )
-
-        st.session_state["presupuesto_db"] = df_db_editado
