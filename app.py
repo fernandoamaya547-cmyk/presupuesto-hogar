@@ -22,7 +22,7 @@ if "plantilla_conceptos" not in st.session_state:
         {"Concepto": "Mercado", "Tipo": "Variable", "Monto Base (COP)": 800000},
         {"Concepto": "Internet", "Tipo": "Fijo", "Monto Base (COP)": 120000},
         {"Concepto": "Administración", "Tipo": "Fijo", "Monto Base (COP)": 250000},
-        {"Concepto": "Imprevistos / Varios", "Tipo": "Variable", "Monto Base (COP)": 200000},
+        {"Concepto": "Imprevistos / Varios", "Tipo": "Variable", "Monto Base (COP)": 200000}
     ])
 
 # 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
@@ -110,8 +110,7 @@ else:
         st.subheader("1. Modifica la Plantilla de Gastos Fijos y Variables")
         st.caption("Escribe o modifica valores directamente en la tabla. Los cambios se conservan automáticamente.")
 
-        # Mostramos el editor usando como fuente el estado de la sesión
-        # y guardamos el resultado de vuelta en session_state para no perder cambios.
+        # Tabla editable con syntax corregido
         df_editado = st.data_editor(
             st.session_state["plantilla_conceptos"],
             num_rows="dynamic",
@@ -120,4 +119,71 @@ else:
                     "Monto Base (COP)",
                     format="$%d",
                     min_value=0,
-                    step=1
+                    step=1000
+                ),
+                "Tipo": st.column_config.SelectboxColumn(
+                    "Tipo de Gasto",
+                    options=["Fijo", "Variable"],
+                    required=True
+                )
+            },
+            use_container_width=True,
+            key="editor_plantilla_key"
+        )
+
+        st.session_state["plantilla_conceptos"] = df_editado
+
+        st.divider()
+
+        st.subheader("2. Generar Presupuesto del Mes")
+        st.write("Selecciona el período para cargar los ítems creados en la plantilla:")
+
+        col_m1, col_m2, col_m3 = st.columns([2, 2, 3])
+        with col_m1:
+            mes_destino = st.selectbox(
+                "Mes a presupuestar:",
+                ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+                index=7
+            )
+        with col_m2:
+            anio_destino = st.number_input("Año:", min_value=2024, max_value=2030, value=2026)
+
+        with col_m3:
+            st.write("")
+            st.write("") 
+            if st.button("🚀 Cargar Presupuesto para este Mes", use_container_width=True):
+                df_db = st.session_state["presupuesto_db"]
+
+                existe = not df_db[(df_db["Mes"] == mes_destino) & (df_db["Año"] == anio_destino)].empty
+                
+                if existe:
+                    st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}. Puedes editarlo en la pestaña 'Histórico'.")
+                else:
+                    id_inicial = (df_db["ID"].max() + 1) if not df_db.empty else 101
+                    nuevos_registros = []
+
+                    for idx, row in st.session_state["plantilla_conceptos"].iterrows():
+                        if pd.notna(row["Concepto"]) and str(row["Concepto"]).strip() != "":
+                            nuevos_registros.append({
+                                "ID": int(id_inicial),
+                                "Mes": mes_destino,
+                                "Año": anio_destino,
+                                "Concepto": row["Concepto"],
+                                "Tipo": row["Tipo"],
+                                "Monto Presupuestado": row["Monto Base (COP)"],
+                                "Monto Pagado": 0,
+                                "Estado": "Pendiente"})
+                            id_inicial += 1
+
+                    if nuevos_registros:
+                        st.session_state["presupuesto_db"] = pd.concat(
+                            [df_db, pd.DataFrame(nuevos_registros)],
+                            ignore_index=True
+                        )
+                        st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} generado exitosamente!")
+                        st.rerun()
+                    else:
+                        st.error("La plantilla está vacía. Agrega al menos un concepto con valor.")
+
+    # ----------------------------------------------------
+    # TAB 2: REGISTRAR PAGOS (CI
