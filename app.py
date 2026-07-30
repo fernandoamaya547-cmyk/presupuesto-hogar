@@ -11,6 +11,10 @@ st.set_page_config(
     layout="wide"
 )
 
+# CREDENCIALES DE ACCESO (Modifícalas según tus necesidades)
+USUARIO_CORRECTO = "admin"
+CLAVE_CORRECTA = "1234"
+
 # ARCHIVOS PERSISTENTES LOCALES
 FILE_CATALOGO = "catalogo_data.csv"
 FILE_PRESUPUESTO = "presupuesto_data.csv"
@@ -40,23 +44,62 @@ def guardar_presupuesto(df):
 # ==========================================
 # INICIALIZACIÓN DEL ESTADO (SESSION STATE)
 # ==========================================
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
+
 if "catalogo_conceptos" not in st.session_state:
     st.session_state["catalogo_conceptos"] = cargar_catalogo()
 
 if "presupuesto_db" not in st.session_state:
     st.session_state["presupuesto_db"] = cargar_presupuesto()
 
+# ==========================================
+# PANTALLA DE LOGIN
+# ==========================================
+def pantalla_login():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.write("")
+        st.write("")
+        st.title("🔒 Iniciar Sesión")
+        st.caption("Ingresa tus credenciales para acceder al sistema de presupuesto.")
+
+        with st.form("form_login"):
+            usuario = st.text_input("Usuario")
+            clave = st.text_input("Contraseña", type="password")
+            btn_ingresar = st.form_submit_button("🔑 Ingresar", use_container_width=True)
+
+            if btn_ingresar:
+                if usuario == USUARIO_CORRECTO and clave == CLAVE_CORRECTA:
+                    st.session_state["autenticado"] = True
+                    st.success("¡Acceso concedido!")
+                    st.rerun()
+                else:
+                    st.error("❌ Usuario o contraseña incorrectos.")
+
+# Si no está autenticado, detiene la ejecución mostrando solo la pantalla de Login
+if not st.session_state["autenticado"]:
+    pantalla_login()
+    st.stop()
+
 # ==============================================================================
-# BARRA LATERAL IZQUIERDA DESPLEGABLE
+# BARRA LATERAL IZQUIERDA DESPLEGABLE (SOLO VISIBLE SI ESTÁ AUTENTICADO)
 # ==============================================================================
 with st.sidebar:
     st.header("⚙️ Panel Lateral de Control")
     st.caption("Filtros e indicadores clave colapsables.")
 
+    # Botón para Cerrar Sesión
+    if st.button("🚪 Cerrar Sesión", use_container_width=True):
+        st.session_state["autenticado"] = False
+        st.rerun()
+
+    st.divider()
+
     df_db_sidebar = st.session_state["presupuesto_db"]
 
     if not df_db_sidebar.empty:
-        # Seccion desplegable 1: Filtros de Fecha
+        # Sección desplegable 1: Filtros de Fecha
         with st.expander("🔍 **Filtros de Búsqueda**", expanded=True):
             anios_disponibles = sorted(df_db_sidebar["Año"].unique().tolist())
             anio_sel = st.selectbox("Seleccionar Año:", anios_disponibles, index=len(anios_disponibles)-1, key="sb_anio")
