@@ -17,12 +17,6 @@ st.set_page_config(
 # 1. CATÁLOGO / BASE DE CONCEPTOS DISPONIBLES
 if "catalogo_conceptos" not in st.session_state:
     st.session_state["catalogo_conceptos"] = pd.DataFrame([
-        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
-        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 350000},
-        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 800000},
-        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 120000},
-        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 250000},
-        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 200000}
     ])
 
 # 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
