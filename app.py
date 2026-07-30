@@ -1,286 +1,247 @@
 import streamlit as st
 import pandas as pd
-import os
-from datetime import datetime
 
-# Configuración de la página
-st.set_page_config(page_title="Gestor de Presupuesto Familiar", page_icon="🏠", layout="wide")
+# ==========================================
+# CONFIGURACIÓN DE LA PÁGINA
+# ==========================================
+st.set_page_config(
+    page_title="Gestor de Presupuesto Automatizado",
+    page_icon="💰",
+    layout="wide"
+)
 
-# Archivos de datos
-CONCEPTOS_FILE = "conceptos.csv"
-PRESUPUESTO_FILE = "presupuesto.csv"
-PAGOS_FILE = "pagos.csv"
-INGRESOS_FILE = "ingresos_generales.csv"
+# ==========================================
+# INICIALIZACIÓN DEL ESTADO (SESSION STATE)
+# ==========================================
 
-# Funciones de carga de datos
-def cargar_datos():
-    if not os.path.exists(CONCEPTOS_FILE):
-        pd.DataFrame(columns=["ID", "Concepto", "Tipo"]).to_csv(CONCEPTOS_FILE, index=False)
-    if not os.path.exists(PRESUPUESTO_FILE):
-        pd.DataFrame(columns=["Mes", "ID_Concepto", "Concepto", "Tipo", "Monto_Presupuestado"]).to_csv(PRESUPUESTO_FILE, index=False)
-    if not os.path.exists(PAGOS_FILE):
-        pd.DataFrame(columns=["ID_Pago", "Mes", "ID_Concepto", "Concepto", "Monto_Pagado", "Fecha_Pago", "Estado"]).to_csv(PAGOS_FILE, index=False)
-    if not os.path.exists(INGRESOS_FILE):
-        pd.DataFrame(columns=["Mes", "Fuente", "Monto_Ingreso", "Destino_Asignado"]).to_csv(INGRESOS_FILE, index=False)
+# 1. PLANTILLA MAESTRA DE CONCEPTOS Y VALORES BASE
+if "plantilla_conceptos" not in st.session_state:
+    st.session_state["plantilla_conceptos"] = pd.DataFrame([
+        {"Concepto": "Arriendo", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
+        {"Concepto": "Servicios Públicos", "Tipo": "Variable", "Monto Base (COP)": 350000},
+        {"Concepto": "Mercado", "Tipo": "Variable", "Monto Base (COP)": 800000},
+        {"Concepto": "Internet", "Tipo": "Fijo", "Monto Base (COP)": 120000},
+        {"Concepto": "Administración", "Tipo": "Fijo", "Monto Base (COP)": 250000},
+        {"Concepto": "Imprevistos / Varios", "Tipo": "Variable", "Monto Base (COP)": 200000},
+    ])
 
-cargar_datos()
+# 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
+if "presupuesto_db" not in st.session_state:
+    st.session_state["presupuesto_db"] = pd.DataFrame([
+        {"ID": 101, "Mes": "Julio", "Año": 2026, "Concepto": "Arriendo", "Tipo": "Fijo", "Monto Presupuestado": 1500000, "Monto Pagado": 1500000, "Estado": "Pagado"},
+        {"ID": 102, "Mes": "Julio", "Año": 2026, "Concepto": "Servicios Públicos", "Tipo": "Variable", "Monto Presupuestado": 350000, "Monto Pagado": 320000, "Estado": "Pagado"},
+        {"ID": 103, "Mes": "Julio", "Año": 2026, "Concepto": "Mercado", "Tipo": "Variable", "Monto Presupuestado": 800000, "Monto Pagado": 0, "Estado": "Pendiente"}
+    ])
 
-# -------------------------------------------------------------
-# CONTROL DE ACCESOS Y AUTENTICACIÓN
-# -------------------------------------------------------------
-USUARIOS = {
-    "admin": {"nombre": "Usuario 1 (Admin)", "password": "123", "rol": "Admin"},
-    "usuario2": {"nombre": "Usuario 2 (General)", "password": "456", "rol": "Restringido"}
-}
+# ==========================================
+# BARRA LATERAL: CONTROL DE ACCESO
+# ==========================================
+st.sidebar.title("🔐 Control de Acceso")
+rol = st.sidebar.selectbox(
+    "Selecciona tu perfil:",
+    ["Usuario 2 (General / Consulta)", "Admin (Usuario 1)"]
+)
+st.sidebar.divider()
 
-if "autenticado" not in st.session_state:
-    st.session_state["autenticado"] = False
-if "usuario_actual" not in st.session_state:
-    st.session_state["usuario_actual"] = None
-
-def login():
-    st.title("🔐 Control de Acceso al Sistema Presupuestal")
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.subheader("Iniciar Sesión")
-        with st.form("form_login"):
-            input_user = st.text_input("Usuario")
-            input_pass = st.text_input("Contraseña", type="password")
-            btn_login = st.form_submit_button("Ingresar")
-            
-            if btn_login:
-                if input_user in USUARIOS and USUARIOS[input_user]["password"] == input_pass:
-                    st.session_state["autenticado"] = True
-                    st.session_state["usuario_actual"] = USUARIOS[input_user]
-                    st.success(f"Bienvenido {USUARIOS[input_user]['nombre']}")
-                    st.rerun()
-                else:
-                    st.error("Usuario o contraseña incorrectos")
-
-# Si no está autenticado, mostrar formulario de Login y detener ejecución
-if not st.session_state["autenticado"]:
-    login()
-    st.stop()
-
-# -------------------------------------------------------------
-# BARRA LATERAL (USUARIO LOGUEADO Y NAVEGACIÓN)
-# -------------------------------------------------------------
-usuario_info = st.session_state["usuario_actual"]
-st.sidebar.title(f"👤 {usuario_info['nombre']}")
-
-if st.sidebar.button("🚪 Cerrar Sesión"):
-    st.session_state["autenticado"] = False
-    st.session_state["usuario_actual"] = None
-    st.rerun()
-
-st.sidebar.markdown("---")
-
-# Filtrado de ventanas según el rol del usuario
-if usuario_info["rol"] == "Admin":
-    ventanas_disponibles = ["🏠 Presupuesto de Pagos Casa", "🏛️ Presupuesto General Casa"]
-else:
-    ventanas_disponibles = ["🏛️ Presupuesto General Casa"]
-
-st.sidebar.title("🏠 Navegación")
-ventana_principal = st.sidebar.radio("Selecciona la Ventana:", ventanas_disponibles)
-st.sidebar.markdown("---")
-
-# =============================================================
-# VENTANA 1: PRESUPUESTO DE PAGOS CASA (Solo Admin)
-# =============================================================
-if ventana_principal == "🏠 Presupuesto de Pagos Casa":
+# ==========================================
+# VISTA 1: USUARIO 2 (CONSULTA / DASHBOARD)
+# ==========================================
+if rol == "Usuario 2 (General / Consulta)":
     st.title("🏠 Presupuesto de Pagos Casa")
-    st.caption("Gestión detallada de conceptos, presupuesto asignado, órdenes de pago y cumplimiento.")
-    
-    sub_menu = st.sidebar.selectbox("Módulo de Pagos", [
-        "📊 Dashboard de Cumplimiento",
-        "📝 Gestión de Conceptos",
-        "📅 Presupuesto Mensual de Pagos",
-        "💳 Registrar / Cerrar Orden de Pago"
+    st.info("Perfil: Consulta General — Vista de cumplimiento e histórico de pagos.")
+
+    df = st.session_state["presupuesto_db"]
+
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        mes_sel = st.selectbox("Filtrar por Mes:", ["Todos"] + list(df["Mes"].unique()))
+    with col_f2:
+        anio_sel = st.selectbox("Filtrar por Año:", ["Todos"] + list(df["Año"].unique()))
+
+    df_filtrado = df.copy()
+    if mes_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Mes"] == mes_sel]
+    if anio_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Año"] == anio_sel]
+
+    st.subheader("📊 Dashboard de Cumplimiento")
+    total_presupuestado = df_filtrado["Monto Presupuestado"].sum()
+    total_pagado = df_filtrado["Monto Pagado"].sum()
+    total_pendiente = total_presupuestado - total_pagado
+    porcentaje = (total_pagado / total_presupuestado * 100) if total_presupuestado > 0 else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Presupuestado", f"${total_presupuestado:,.0f} COP")
+    c2.metric("Total Pagado", f"${total_pagado:,.0f} COP")
+    c3.metric("Pendiente por Pagar", f"${total_pendiente:,.0f} COP")
+    c4.metric("% Cumplimiento", f"{porcentaje:.1f}%")
+
+    st.divider()
+    st.subheader("📋 Histórico de Pagos")
+    if not df_filtrado.empty:
+        st.dataframe(
+            df_filtrado.style.format({
+                "Monto Presupuestado": "${:,.0f} COP",
+                "Monto Pagado": "${:,.0f} COP"
+            }),
+            use_container_width=True
+        )
+    else:
+        st.warning("No hay registros para los filtros seleccionados.")
+
+# ==========================================
+# VISTA 2: ADMIN (GESTIÓN RÁPIDA Y DINÁMICA)
+# ==========================================
+else:
+    st.title("⚙️ Panel de Administración y Presupuesto")
+
+    tab_plantilla, tab_liquidar, tab_historial = st.tabs([
+        "📝 Plantilla Maestra y Carga Mensual",
+        "✅ Cierre / Liquidación de Pagos",
+        "📊 Histórico y Resumen General"
     ])
-    
-    # 1.1 DASHBOARD DE CUMPLIMIENTO
-    if sub_menu == "📊 Dashboard de Cumplimiento":
-        st.header("📊 Resumen de Cumplimiento de Pagos")
-        df_presupuesto = pd.read_csv(PRESUPUESTO_FILE)
-        df_pagos = pd.read_csv(PAGOS_FILE)
-        
-        if df_presupuesto.empty:
-            st.info("Aún no tienes presupuestos de pagos registrados.")
-        else:
-            mes_sel = st.selectbox("Seleccionar Mes", df_presupuesto["Mes"].unique())
-            
-            df_p_mes = df_presupuesto[df_presupuesto["Mes"] == mes_sel]
-            df_pag_mes = df_pagos[df_pagos["Mes"] == mes_sel]
-            
-            total_presupuestado = df_p_mes["Monto_Presupuestado"].sum()
-            total_pagado = df_pag_mes["Monto_Pagado"].sum()
-            pendiente = total_presupuestado - total_pagado
-            
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Total Presupuestado Pagos", f"${total_presupuestado:,.0f} COP")
-            col2.metric("Total Pagado Real", f"${total_pagado:,.0f} COP")
-            col3.metric("Pendiente por Pagar", f"${pendiente:,.0f} COP", delta_color="inverse")
-            
-            st.subheader("Detalle Presupuestado vs. Pagado")
-            st.dataframe(df_p_mes, use_container_width=True)
 
-    # 1.2 GESTIÓN DE CONCEPTOS
-    elif sub_menu == "📝 Gestión de Conceptos":
-        st.header("📝 Gestión de Conceptos de Gastos")
-        df_conceptos = pd.read_csv(CONCEPTOS_FILE)
-        
-        with st.form("form_concepto"):
-            nuevo_concepto = st.text_input("Nombre del Concepto (ej. Arriendo, Luz, Mercado)")
-            tipo_concepto = st.selectbox("Tipo de Gasto", ["Fijo", "Variable"])
-            btn_guardar = st.form_submit_button("Guardar Concepto")
-            
-            if btn_guardar and nuevo_concepto:
-                nuevo_id = len(df_conceptos) + 1
-                nuevo_df = pd.DataFrame([{"ID": nuevo_id, "Concepto": nuevo_concepto, "Tipo": tipo_concepto}])
-                df_conceptos = pd.concat([df_conceptos, nuevo_df], ignore_index=True)
-                df_conceptos.to_csv(CONCEPTOS_FILE, index=False)
-                st.success(f"Concepto '{nuevo_concepto}' registrado correctamente.")
-                st.rerun()
+    # ----------------------------------------------------
+    # TAB 1: PLANTILLA INTERACTIVA Y GENERACIÓN RÁPIDA
+    # ----------------------------------------------------
+    with tab_plantilla:
+        st.subheader("1. Modifica la Plantilla de Gastos Fijos y Variables")
+        st.caption("Puedes cambiar los valores directamente en las celdas, añadir nuevos conceptos o eliminar filas.")
 
-        st.subheader("Conceptos Registrados")
-        st.dataframe(df_conceptos, use_container_width=True)
+        # Editor interactivo de tabla tipo Excel
+        df_editado = st.data_editor(
+            st.session_state["plantilla_conceptos"],
+            num_rows="dynamic",
+            column_config={
+                "Monto Base (COP)": st.column_config.NumberColumn(
+                    "Monto Base (COP)",
+                    format="$%d",
+                    min_value=0,
+                    step=1000
+                ),
+                "Tipo": st.column_config.SelectboxColumn(
+                    "Tipo de Gasto",
+                    options=["Fijo", "Variable"],
+                    required=True
+                )
+            },
+            use_container_width=True,
+            key="editor_plantilla"
+        )
 
-    # 1.3 PRESUPUESTO MENSUAL DE PAGOS
-    elif sub_menu == "📅 Presupuesto Mensual de Pagos":
-        st.header("📅 Asignación de Presupuesto Mensual de Pagos")
-        df_conceptos = pd.read_csv(CONCEPTOS_FILE)
-        df_presupuesto = pd.read_csv(PRESUPUESTO_FILE)
-        
-        if df_conceptos.empty:
-            st.warning("Primero debes registrar conceptos en el módulo 'Gestión de Conceptos'.")
-        else:
-            mes_actual = st.text_input("Período (Año-Mes)", value=datetime.now().strftime("%Y-%m"))
-            concepto_sel = st.selectbox("Seleccionar Concepto", df_conceptos["Concepto"].tolist())
-            monto_presupuestado = st.number_input("Monto Presupuestado ($ COP)", min_value=0, step=50000)
-            
-            if st.button("Asignar a Presupuesto de Pagos"):
-                concepto_info = df_conceptos[df_conceptos["Concepto"] == concepto_sel].iloc[0]
-                nuevo_reg = {
-                    "Mes": mes_actual,
-                    "ID_Concepto": concepto_info["ID"],
-                    "Concepto": concepto_sel,
-                    "Tipo": concepto_info["Tipo"],
-                    "Monto_Presupuestado": monto_presupuestado
-                }
-                df_presupuesto = pd.concat([df_presupuesto, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                df_presupuesto.to_csv(PRESUPUESTO_FILE, index=False)
-                st.success(f"Presupuesto asignado a '{concepto_sel}' para el mes {mes_actual}.")
-                st.rerun()
+        # Actualizamos el estado con la tabla editada
+        st.session_state["plantilla_conceptos"] = df_editado
+
+        st.divider()
+
+        st.subheader("2. Generar Presupuesto del Mes")
+        st.write("Selecciona el período para cargar los ítems anteriores de forma automática:")
+
+        col_m1, col_m2, col_m3 = st.columns([2, 2, 3])
+        with col_m1:
+            mes_destino = st.selectbox(
+                "Mes a presupuestar:",
+                ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"],
+                index=7  # Agosto por defecto
+            )
+        with col_m2:
+            anio_destino = st.number_input("Año:", min_value=2024, max_value=2030, value=2026)
+
+        with col_m3:
+            st.write("") # Espaciador
+            st.write("") 
+            if st.button("🚀 Cargar Presupuesto para este Mes", use_container_width=True):
+                df_db = st.session_state["presupuesto_db"]
+
+                # Verificar si ya existen registros para ese mes/año
+                existe = not df_db[(df_db["Mes"] == mes_destino) & (df_db["Año"] == anio_destino)].empty
                 
-            st.subheader("Presupuestos Asignados")
-            st.dataframe(df_presupuesto, use_container_width=True)
+                if existe:
+                    st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}. Puedes editarlo en la pestaña 'Histórico'.")
+                else:
+                    # Generar registros automáticamente a partir de la plantilla
+                    id_inicial = (df_db["ID"].max() + 1) if not df_db.empty else 101
+                    nuevos_registros = []
 
-    # 1.4 REGISTRAR / CERRAR ORDEN DE PAGO
-    elif sub_menu == "💳 Registrar / Cerrar Orden de Pago":
-        st.header("💳 Generación y Cierre de Orden de Pago")
-        df_presupuesto = pd.read_csv(PRESUPUESTO_FILE)
-        df_pagos = pd.read_csv(PAGOS_FILE)
+                    for idx, row in df_editado.iterrows():
+                        nuevos_registros.append({
+                            "ID": int(id_inicial),
+                            "Mes": mes_destino,
+                            "Año": anio_destino,
+                            "Concepto": row["Concepto"],
+                            "Tipo": row["Tipo"],
+                            "Monto Presupuestado": row["Monto Base (COP)"],
+                            "Monto Pagado": 0,
+                            "Estado": "Pendiente"
+                        })
+                        id_inicial += 1
+
+                    st.session_state["presupuesto_db"] = pd.concat(
+                        [df_db, pd.DataFrame(nuevos_registros)],
+                        ignore_index=True
+                    )
+                    st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} generado exitosamente con {len(nuevos_registros)} conceptos!")
+                    st.rerun()
+
+    # ----------------------------------------------------
+    # TAB 2: REGISTRAR PAGOS (CIERRE DE ÓRDENES)
+    # ----------------------------------------------------
+    with tab_liquidar:
+        st.subheader("✅ Liquidar / Cerrar Pagos del Mes")
         
-        if df_presupuesto.empty:
-            st.warning("No hay presupuestos registrados para generar órdenes de pago.")
+        df_pendientes = st.session_state["presupuesto_db"][st.session_state["presupuesto_db"]["Estado"] == "Pendiente"]
+
+        if not df_pendientes.empty:
+            col_l1, col_l2 = st.columns([2, 2])
+            
+            with col_l1:
+                id_pago = st.selectbox(
+                    "Selecciona el concepto a pagar:",
+                    options=df_pendientes["ID"].tolist(),
+                    format_func=lambda x: f"#{x} - {df_pendientes[df_pendientes['ID'] == x]['Concepto'].values[0]} ({df_pendientes[df_pendientes['ID'] == x]['Mes'].values[0]})"
+                )
+                
+                info_item = df_pendientes[df_pendientes["ID"] == id_pago].iloc[0]
+                st.info(f"**Monto Presupuestado:** ${info_item['Monto Presupuestado']:,.0f} COP")
+
+            with col_l2:
+                monto_real = st.number_input(
+                    "Valor Real Pagado (COP):",
+                    min_value=0,
+                    value=int(info_item['Monto Presupuestado']),
+                    step=1000
+                )
+
+                if st.button("Marcar Pago como Realizado"):
+                    idx = st.session_state["presupuesto_db"].index[st.session_state["presupuesto_db"]["ID"] == id_pago].tolist()[0]
+                    st.session_state["presupuesto_db"].at[idx, "Monto Pagado"] = monto_real
+                    st.session_state["presupuesto_db"].at[idx, "Estado"] = "Pagado"
+                    st.success(f"¡Orden #{id_pago} de '{info_item['Concepto']}' actualizada a PAGADO!")
+                    st.rerun()
         else:
-            meses = df_presupuesto["Mes"].unique()
-            mes_sel = st.selectbox("Filtrar por Mes", meses)
-            df_mes = df_presupuesto[df_presupuesto["Mes"] == mes_sel]
-            
-            concepto_pago = st.selectbox("Obligación / Concepto a Pagar", df_mes["Concepto"].tolist())
-            monto_pago = st.number_input("Monto a Pagar Real ($ COP)", min_value=0, step=10000)
-            
-            if st.button("Generar y Cerrar Orden de Pago"):
-                concepto_info = df_mes[df_mes["Concepto"] == concepto_pago].iloc[0]
-                id_pago = len(df_pagos) + 1
-                nuevo_pago = {
-                    "ID_Pago": id_pago,
-                    "Mes": mes_sel,
-                    "ID_Concepto": concepto_info["ID_Concepto"],
-                    "Concepto": concepto_pago,
-                    "Monto_Pagado": monto_pago,
-                    "Fecha_Pago": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                    "Estado": "Cerrado / Pagado"
-                }
-                df_pagos = pd.concat([df_pagos, pd.DataFrame([nuevo_pago])], ignore_index=True)
-                df_pagos.to_csv(PAGOS_FILE, index=False)
-                st.success(f"¡Orden de Pago #{id_pago} CERRADA con éxito para '{concepto_pago}'!")
-                st.rerun()
+            st.success("🎉 ¡Excelente! No tienes pagos pendientes registrados.")
 
-            st.subheader("Histórico de Órdenes Pagadas")
-            st.dataframe(df_pagos, use_container_width=True)
+    # ----------------------------------------------------
+    # TAB 3: EDICIÓN GENERAL Y ELIMINACIÓN DE REGISTROS
+    # ----------------------------------------------------
+    with tab_historial:
+        st.subheader("📊 Histórico Completo de Presupuestos Generados")
+        st.caption("Si cometiste un error o duplicaste un mes, puedes editar cualquier casilla o eliminar filas desde esta tabla:")
 
-# =============================================================
-# VENTANA 2: PRESUPUESTO GENERAL CASA (Admin y Usuario 2)
-# =============================================================
-elif ventana_principal == "🏛️ Presupuesto General Casa":
-    st.title("🏛️ Presupuesto General Casa")
-    st.caption("Módulo Macro: Control de ingresos generales, distribución de fondos y balance global del hogar.")
-    
-    sub_menu_gen = st.sidebar.selectbox("Módulo General", [
-        "📈 Dashboard Financiero Macro",
-        "💵 Registro de Ingresos Generales"
-    ])
-    
-    # 2.1 DASHBOARD FINANCIERO MACRO
-    if sub_menu_gen == "📈 Dashboard Financiero Macro":
-        st.header("📈 Balance General del Hogar")
-        df_ingresos = pd.read_csv(INGRESOS_FILE)
-        df_presupuesto = pd.read_csv(PRESUPUESTO_FILE)
-        df_pagos = pd.read_csv(PAGOS_FILE)
-        
-        meses_disp = list(set(df_ingresos["Mes"].tolist() + df_presupuesto["Mes"].tolist()))
-        
-        if not meses_disp:
-            st.info("Registra ingresos y presupuestos para ver el balance general.")
-        else:
-            mes_sel = st.selectbox("Seleccionar Período", meses_disp)
-            
-            ingresos_mes = df_ingresos[df_ingresos["Mes"] == mes_sel]["Monto_Ingreso"].sum()
-            gastos_pres_mes = df_presupuesto[df_presupuesto["Mes"] == mes_sel]["Monto_Presupuestado"].sum()
-            gastos_reales_mes = df_pagos[df_pagos["Mes"] == mes_sel]["Monto_Pagado"].sum()
-            
-            saldo_proyectado = ingresos_mes - gastos_pres_mes
-            saldo_real = ingresos_mes - gastos_reales_mes
-            
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Ingresos Totales", f"${ingresos_mes:,.0f} COP")
-            c2.metric("Presupuesto Gastos Casa", f"${gastos_pres_mes:,.0f} COP")
-            c3.metric("Pagos Realizados", f"${gastos_reales_mes:,.0f} COP")
-            c4.metric("Saldo Disponible Real", f"${saldo_real:,.0f} COP")
-            
-            st.markdown("---")
-            st.subheader("💡 Resumen Ejecutivo")
-            st.write(f"- **Saldo Proyectado:** ${saldo_proyectado:,.0f} COP (Ingresos vs. Presupuestado)")
-            st.write(f"- **Saldo Disponible Actual:** ${saldo_real:,.0f} COP (Ingresos vs. Pagos Efectuados)")
+        # Editor completo de la base de datos acumulada
+        df_db_editado = st.data_editor(
+            st.session_state["presupuesto_db"],
+            num_rows="dynamic",
+            column_config={
+                "Monto Presupuestado": st.column_config.NumberColumn(format="$%d"),
+                "Monto Pagado": st.column_config.NumberColumn(format="$%d"),
+                "Estado": st.column_config.SelectboxColumn(options=["Pendiente", "Pagado"])
+            },
+            use_container_width=True,
+            key="editor_db_historico"
+        )
 
-    # 2.2 REGISTRO DE INGRESOS GENERALES
-    elif sub_menu_gen == "💵 Registro de Ingresos Generales":
-        st.header("💵 Registro de Ingresos Generales")
-        df_ingresos = pd.read_csv(INGRESOS_FILE)
-        
-        with st.form("form_ingreso"):
-            mes_ingreso = st.text_input("Período (Año-Mes)", value=datetime.now().strftime("%Y-%m"))
-            fuente_ingreso = st.text_input("Fuente de Ingreso (ej. Salario, Negocio, Arriendo cobrado)")
-            monto_ingreso = st.number_input("Monto ($ COP)", min_value=0, step=100000)
-            destino = st.selectbox("Destino Principal", ["Fondo Pagos Casa", "Ahorro / Inversión", "Libre Disposición"])
-            
-            btn_ingreso = st.form_submit_button("Registrar Ingreso")
-            
-            if btn_ingreso and fuente_ingreso:
-                nuevo_reg = {
-                    "Mes": mes_ingreso,
-                    "Fuente": fuente_ingreso,
-                    "Monto_Ingreso": monto_ingreso,
-                    "Destino_Asignado": destino
-                }
-                df_ingresos = pd.concat([df_ingresos, pd.DataFrame([nuevo_reg])], ignore_index=True)
-                df_ingresos.to_csv(INGRESOS_FILE, index=False)
-                st.success(f"Ingreso de '{fuente_ingreso}' guardado exitosamente.")
-                st.rerun()
-
-        st.subheader("Histórico de Ingresos")
-        st.dataframe(df_ingresos, use_container_width=True)
+        if st.button("💾 Guardar Cambios en Histórico"):
+            st.session_state["presupuesto_db"] = df_db_editado
+            st.success("¡Base de datos actualizada con éxito!")
+            st.rerun()
