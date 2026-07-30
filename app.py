@@ -14,25 +14,17 @@ st.set_page_config(
 # INICIALIZACIÓN DEL ESTADO (SESSION STATE)
 # ==========================================
 
-# 1. CATÁLOGO / BASE DE CONCEPTOS DISPONIBLES
+# 1. CATÁLOGO / BASE DE CONCEPTOS DISPONIBLES (VACÍO)
 if "catalogo_conceptos" not in st.session_state:
-    st.session_state["catalogo_conceptos"] = pd.DataFrame([
-        {"Concepto": "Arriendo", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
-        {"Concepto": "Servicios Públicos", "Tipo": "Variable", "Monto Base (COP)": 350000},
-        {"Concepto": "Mercado", "Tipo": "Variable", "Monto Base (COP)": 800000},
-        {"Concepto": "Internet", "Tipo": "Fijo", "Monto Base (COP)": 120000},
-        {"Concepto": "Administración", "Tipo": "Fijo", "Monto Base (COP)": 250000},
-        {"Concepto": "Imprevistos / Varios", "Tipo": "Variable", "Monto Base (COP)": 200000}
-    ])
+    st.session_state["catalogo_conceptos"] = pd.DataFrame(
+        columns=["Concepto", "Tipo", "Monto Base (COP)"]
+    )
 
-# 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
+# 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS (VACÍO)
 if "presupuesto_db" not in st.session_state:
-    st.session_state["presupuesto_db"] = pd.DataFrame([
-        {"ID": 101, "Mes": "Julio", "Año": 2026, "Concepto": "Arriendo", "Tipo": "Fijo", "Monto Presupuestado": 1500000, "Monto Pagado": 1500000, "Estado": "Pagado"},
-        {"ID": 102, "Mes": "Julio", "Año": 2026, "Concepto": "Servicios Públicos", "Tipo": "Variable", "Monto Presupuestado": 350000, "Monto Pagado": 320000, "Estado": "Pagado"},
-        {"ID": 103, "Mes": "Julio", "Año": 2026, "Concepto": "Mercado", "Tipo": "Variable", "Monto Presupuestado": 800000, "Monto Pagado": 0, "Estado": "Pendiente"}
-    ])
-
+    st.session_state["presupuesto_db"] = pd.DataFrame(
+        columns=["ID", "Mes", "Año", "Concepto", "Tipo", "Monto Presupuestado", "Monto Pagado", "Estado"]
+    )
 # ==========================================
 # APLICACIÓN GENERAL (USUARIO ÚNICO)
 # ==========================================
