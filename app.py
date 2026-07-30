@@ -17,6 +17,7 @@ st.set_page_config(
 # 1. CATÁLOGO / BASE DE CONCEPTOS DISPONIBLES
 if "catalogo_conceptos" not in st.session_state:
     st.session_state["catalogo_conceptos"] = pd.DataFrame([
+        {"Concepto": "Arriendo", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
     ])
 
 # 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
