@@ -83,7 +83,7 @@ if not st.session_state["autenticado"]:
     st.stop()
 
 # ==============================================================================
-# BARRA LATERAL IZQUIERDA DESPLEGABLE (SOLO VISIBLE SI ESTÁ AUTENTICADO)
+# BARRA LATERAL IZQUIERDA DESPLEGABLE
 # ==============================================================================
 with st.sidebar:
     st.header("⚙️ Panel Lateral de Control")
@@ -165,6 +165,29 @@ with tab_inicio:
         col_kpi2.metric("✅ Total Pagado", f"${total_global_pag:,.0f} COP")
         col_kpi3.metric("⏳ Pendiente por Pagar", f"${total_global_pend:,.0f} COP")
         col_kpi4.metric("📈 Cumplimiento", f"{cumplimiento:.1f}%")
+
+        st.divider()
+
+        # --------------------------------------------------
+        # CUADRO DE CONCEPTOS PENDIENTES POR PAGAR
+        # --------------------------------------------------
+        st.subheader("⏳ Conceptos Pendientes por Pagar")
+        df_pendientes_tabla = df_dash[df_dash["Estado"] == "Pendiente"][
+            ["ID", "Año", "Mes", "Concepto", "Tipo", "Monto Presupuestado"]
+        ]
+
+        if not df_pendientes_tabla.empty:
+            st.dataframe(
+                df_pendientes_tabla,
+                column_config={
+                    "ID": st.column_config.NumberColumn("ID", format="%d"),
+                    "Monto Presupuestado": st.column_config.NumberColumn("Monto Pendiente (COP)", format="$%d")
+                },
+                hide_index=True,
+                use_container_width=True
+            )
+        else:
+            st.success("🎉 ¡Felicidades! No tienes ningún pago pendiente por el momento.")
 
         st.divider()
 
