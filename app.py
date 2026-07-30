@@ -268,6 +268,6 @@ else:
                     st.session_state["presupuesto_db"].at[idx, "Estado"] = "Pagado"
                     st.success(f"¡Orden #{id_pago} de '{info_item['Concepto']}' actualizada a PAGADO!")
                     st.rerun()
-        else:
-            st.success("🎉 ¡Excelente! No tienes pagos pendientes
+        else: st.success("🎉 ¡Excelente! No tienes pagos pendientes
+            
         
