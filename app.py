@@ -109,7 +109,7 @@ else:
     # ----------------------------------------------------
     with tab_conceptos:
         st.subheader("1. Registrar un Nuevo Concepto de Gasto")
-        st.caption("Añade conceptos que luego podrás seleccionar para incluir en cualquier mes.")
+        st.caption("Añade conceptos predeterminados que luego podrás seleccionar para cualquier mes.")
 
         with st.form("form_nuevo_concepto", clear_on_submit=True):
             col_c1, col_c2, col_c3 = st.columns([3, 2, 2])
@@ -120,7 +120,7 @@ else:
             with col_c3:
                 monto_base = st.number_input("Valor Base Sugerido (COP):", min_value=0, value=100000, step=10000)
             
-            btn_guardar_concepto = st.form_submit_button("➕ Registrar Concepto")
+            btn_guardar_concepto = st.form_submit_button("➕ Registrar al Catálogo Base")
 
             if btn_guardar_concepto:
                 if nuevo_concepto.strip() != "":
@@ -133,18 +133,17 @@ else:
                         [st.session_state["catalogo_conceptos"], nueva_fila],
                         ignore_index=True
                     )
-                    st.success(f"¡Concepto '{nuevo_concepto}' agregado exitosamente al catálogo!")
+                    st.success(f"¡Concepto '{nuevo_concepto}' agregado exitosamente!")
                     st.rerun()
                 else:
                     st.error("Por favor ingresa un nombre válido para el concepto.")
 
         st.divider()
-        st.subheader("📋 Catálogo Actual de Conceptos Registrados")
+        st.subheader("📋 Catálogo Actual de Conceptos")
         
-        # KEY ÚNICA APLICADA: editor_catalogo_tabla_key
         df_cat_editado = st.data_editor(
             st.session_state["catalogo_conceptos"],
-            num_rows="dynamic",
+            num_rows="dynamic", # Permite añadir/eliminar filas directamente en la tabla
             column_config={
                 "Monto Base (COP)": st.column_config.NumberColumn(format="$%d", min_value=0, step=1000),
                 "Tipo": st.column_config.SelectboxColumn(options=["Fijo", "Variable"], required=True)
@@ -155,11 +154,11 @@ else:
         st.session_state["catalogo_conceptos"] = df_cat_editado
 
     # ----------------------------------------------------
-    # TAB 2: SELECCIONAR CONCEPTOS Y GENERAR EL MES
+    # TAB 2: SELECCIONAR CONCEPTOS Y EDITARLOS LIBREMENTE
     # ----------------------------------------------------
     with tab_crear_mes:
-        st.subheader("2. Seleccionar Conceptos e Incluirlos en el Presupuesto")
-        st.caption("Elige el mes/año y marca únicamente los conceptos que aplican para este período:")
+        st.subheader("2. Seleccionar / Meter Conceptos para el Presupuesto del Mes")
+        st.caption("Puedes seleccionar conceptos existentes, editar sus nombres, montos, o agregar filas con conceptos completamente nuevos:")
 
         col_m1, col_m2 = st.columns(2)
         with col_m1:
@@ -172,64 +171,66 @@ else:
             anio_destino = st.number_input("Año:", min_value=2024, max_value=2030, value=2026)
 
         st.divider()
-        st.write("### Selecciona los gastos que se pagarán este mes:")
 
         df_cat = st.session_state["catalogo_conceptos"].copy()
-
-        if not df_cat.empty:
+        if "Incluir" not in df_cat.columns:
             df_cat.insert(0, "Incluir", True)
 
-            # KEY ÚNICA APLICADA: editor_seleccion_mes_tabla_key
-            df_seleccion = st.data_editor(
-                df_cat,
-                column_config={
-                    "Incluir": st.column_config.CheckboxColumn("¿Incluir este mes?", default=True),
-                    "Monto Base (COP)": st.column_config.NumberColumn("Monto a Presupuestar (COP)", format="$%d", step=1000)
-                },
-                disabled=["Concepto", "Tipo"],
-                hide_index=True,
-                use_container_width=True,
-                key="editor_seleccion_mes_tabla_key"
-            )
+        # TABLA HABILITADA PARA EDITAR Y METER CONCEPTOS NUEVOS DIRECTAMENTE
+        df_seleccion = st.data_editor(
+            df_cat,
+            num_rows="dynamic", # Permite presionar '+' y METER nuevos conceptos directamente
+            column_config={
+                "Incluir": st.column_config.CheckboxColumn("¿Incluir este mes?", default=True),
+                "Concepto": st.column_config.TextColumn("Nombre del Concepto", required=True),
+                "Tipo": st.column_config.SelectboxColumn("Tipo", options=["Fijo", "Variable"], required=True),
+                "Monto Base (COP)": st.column_config.NumberColumn("Monto Presupuestado (COP)", format="$%d", step=1000)
+            },
+            hide_index=True,
+            use_container_width=True,
+            key="editor_seleccion_mes_tabla_key"
+        )
 
-            st.write("")
-            if st.button("🚀 Cargar Presupuesto para el Mes Seleccionado", use_container_width=True):
-                df_db = st.session_state["presupuesto_db"]
+        st.write("")
+        if st.button("🚀 Cargar Presupuesto para el Mes Seleccionado", use_container_width=True):
+            df_db = st.session_state["presupuesto_db"]
 
-                existe = not df_db[(df_db["Mes"] == mes_destino) & (df_db["Año"] == anio_destino)].empty
+            existe = not df_db[(df_db["Mes"] == mes_destino) & (df_db["Año"] == anio_destino)].empty
 
-                if existe:
-                    st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}. Puedes gestionarlo en la pestaña 'Histórico'.")
+            if existe:
+                st.warning(f"⚠️ Ya existe un presupuesto cargado para {mes_destino} {anio_destino}. Puedes gestionarlo en la pestaña 'Histórico'.")
+            else:
+                # Filtrar solo las filas marcadas con la casilla "Incluir" y con concepto válido
+                conceptos_seleccionados = df_seleccion[
+                    (df_seleccion["Incluir"] == True) & 
+                    (df_seleccion["Concepto"].dropna() != "")
+                ]
+
+                if not conceptos_seleccionados.empty:
+                    id_inicial = (df_db["ID"].max() + 1) if not df_db.empty else 101
+                    nuevos_registros = []
+
+                    for _, row in conceptos_seleccionados.iterrows():
+                        nuevos_registros.append({
+                            "ID": int(id_inicial),
+                            "Mes": mes_destino,
+                            "Año": anio_destino,
+                            "Concepto": str(row["Concepto"]).strip(),
+                            "Tipo": row["Tipo"] if pd.notna(row["Tipo"]) else "Fijo",
+                            "Monto Presupuestado": row["Monto Base (COP)"] if pd.notna(row["Monto Base (COP)"]) else 0,
+                            "Monto Pagado": 0,
+                            "Estado": "Pendiente"
+                        })
+                        id_inicial += 1
+
+                    st.session_state["presupuesto_db"] = pd.concat(
+                        [df_db, pd.DataFrame(nuevos_registros)],
+                        ignore_index=True
+                    )
+                    st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} cargado exitosamente con {len(nuevos_registros)} conceptos!")
+                    st.rerun()
                 else:
-                    conceptos_seleccionados = df_seleccion[df_seleccion["Incluir"] == True]
-
-                    if not conceptos_seleccionados.empty:
-                        id_inicial = (df_db["ID"].max() + 1) if not df_db.empty else 101
-                        nuevos_registros = []
-
-                        for _, row in conceptos_seleccionados.iterrows():
-                            nuevos_registros.append({
-                                "ID": int(id_inicial),
-                                "Mes": mes_destino,
-                                "Año": anio_destino,
-                                "Concepto": row["Concepto"],
-                                "Tipo": row["Tipo"],
-                                "Monto Presupuestado": row["Monto Base (COP)"],
-                                "Monto Pagado": 0,
-                                "Estado": "Pendiente"
-                            })
-                            id_inicial += 1
-
-                        st.session_state["presupuesto_db"] = pd.concat(
-                            [df_db, pd.DataFrame(nuevos_registros)],
-                            ignore_index=True
-                        )
-                        st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} cargado con {len(nuevos_registros)} conceptos!")
-                        st.rerun()
-                    else:
-                        st.error("Debes seleccionar al menos un concepto para generar el presupuesto.")
-        else:
-            st.warning("No hay conceptos en el catálogo. Ve a la pestaña 'Catálogo de Conceptos' para registrar el primero.")
+                    st.error("Debes seleccionar o ingresar al menos un concepto para generar el presupuesto.")
 
     # ----------------------------------------------------
     # TAB 3: REGISTRAR PAGOS (CIERRE DE ÓRDENES)
@@ -276,7 +277,6 @@ else:
         st.subheader("📊 Histórico Completo de Presupuestos Generados")
         st.caption("Puedes editar cualquier casilla o eliminar filas desde esta tabla:")
 
-        # KEY ÚNICA APLICADA: editor_historico_db_tabla_key
         df_db_editado = st.data_editor(
             st.session_state["presupuesto_db"],
             num_rows="dynamic",
