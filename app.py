@@ -17,12 +17,12 @@ st.set_page_config(
 # 1. CATÁLOGO / BASE DE CONCEPTOS DISPONIBLES
 if "catalogo_conceptos" not in st.session_state:
     st.session_state["catalogo_conceptos"] = pd.DataFrame([
-        {"Concepto": "Arriendo", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
-        {"Concepto": "Servicios Públicos", "Tipo": "Variable", "Monto Base (COP)": 350000},
-        {"Concepto": "Mercado", "Tipo": "Variable", "Monto Base (COP)": 800000},
-        {"Concepto": "Internet", "Tipo": "Fijo", "Monto Base (COP)": 120000},
-        {"Concepto": "Administración", "Tipo": "Fijo", "Monto Base (COP)": 250000},
-        {"Concepto": "Imprevistos / Varios", "Tipo": "Variable", "Monto Base (COP)": 200000}
+        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 1500000},
+        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 350000},
+        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 800000},
+        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 120000},
+        {"Concepto": "", "Tipo": "Fijo", "Monto Base (COP)": 250000},
+        {"Concepto": "", "Tipo": "Variable", "Monto Base (COP)": 200000}
     ])
 
 # 2. BASE DE DATOS DE PRESUPUESTOS MENSUALES GENERADOS
@@ -152,7 +152,7 @@ else:
                 "Tipo": st.column_config.SelectboxColumn(options=["Fijo", "Variable"], required=True)
             },
             use_container_width=True,
-            key="editor_catalogo_tabla_key"
+            key="key_editor_catalogo_base_v1" # <--- CLAVE ÚNICA UNIFORMADA
         )
         st.session_state["catalogo_conceptos"] = df_cat_editado
 
@@ -190,7 +190,7 @@ else:
             },
             hide_index=True,
             use_container_width=True,
-            key="editor_seleccion_mes_tabla_key"
+            key="key_editor_crear_mes_v1" # <--- CLAVE ÚNICA UNIFORMADA
         )
 
         st.write("")
@@ -218,3 +218,56 @@ else:
                             "Año": anio_destino,
                             "Concepto": str(row["Concepto"]).strip(),
                             "Tipo": row["Tipo"] if pd.notna(row["Tipo"]) else "Fijo",
+                            "Monto Presupuestado": row["Monto Base (COP)"] if pd.notna(row["Monto Base (COP)"]) else 0,
+                            "Monto Pagado": 0,
+                            "Estado": "Pendiente"
+                        })
+                        id_inicial += 1
+
+                    st.session_state["presupuesto_db"] = pd.concat(
+                        [df_db, pd.DataFrame(nuevos_registros)],
+                        ignore_index=True
+                    )
+                    st.success(f"🎉 ¡Presupuesto para {mes_destino} {anio_destino} cargado exitosamente!")
+                    st.rerun()
+                else:
+                    st.error("Debes seleccionar o ingresar al menos un concepto para generar el presupuesto.")
+
+    # ----------------------------------------------------
+    # TAB 3: REGISTRAR PAGOS (CIERRE DE ÓRDENES)
+    # ----------------------------------------------------
+    with tab_liquidar:
+        st.subheader("✅ Liquidar / Cerrar Pagos del Mes")
+        
+        df_pendientes = st.session_state["presupuesto_db"][st.session_state["presupuesto_db"]["Estado"] == "Pendiente"]
+
+        if not df_pendientes.empty:
+            col_l1, col_l2 = st.columns([2, 2])
+            
+            with col_l1:
+                id_pago = st.selectbox(
+                    "Selecciona el concepto a pagar:",
+                    options=df_pendientes["ID"].tolist(),
+                    format_func=lambda x: f"#{x} - {df_pendientes[df_pendientes['ID'] == x]['Concepto'].values[0]} ({df_pendientes[df_pendientes['ID'] == x]['Mes'].values[0]})"
+                )
+                
+                info_item = df_pendientes[df_pendientes["ID"] == id_pago].iloc[0]
+                st.info(f"**Monto Presupuestado:** ${info_item['Monto Presupuestado']:,.0f} COP")
+
+            with col_l2:
+                monto_real = st.number_input(
+                    "Valor Real Pagado (COP):",
+                    min_value=0,
+                    value=int(info_item['Monto Presupuestado']),
+                    step=1000
+                )
+
+                if st.button("Marcar Pago como Realizado"):
+                    idx = st.session_state["presupuesto_db"].index[st.session_state["presupuesto_db"]["ID"] == id_pago].tolist()[0]
+                    st.session_state["presupuesto_db"].at[idx, "Monto Pagado"] = monto_real
+                    st.session_state["presupuesto_db"].at[idx, "Estado"] = "Pagado"
+                    st.success(f"¡Orden #{id_pago} de '{info_item['Concepto']}' actualizada a PAGADO!")
+                    st.rerun()
+        else:
+            st.success("🎉 ¡Excelente! No tienes pagos pendientes
+        
